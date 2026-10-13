@@ -225,15 +225,23 @@ def simulate_accel(rng: np.random.Generator, move: np.ndarray) -> np.ndarray:
     return orient + dyn + rng.normal(0, 0.01, (n, 3))
 
 
-def generate_session(sc: Scenario, patient_id: str, rng: np.random.Generator, start: datetime):
+def draw_patient_baseline(rng: np.random.Generator) -> dict:
+    """Resting physiology of one patient. Varies between patients, stable across their sessions."""
+    return dict(hr0=rng.uniform(62, 74), rmssd0=rng.uniform(35, 55),
+                eda0=rng.uniform(1.0, 3.0), temp0=rng.uniform(33.2, 34.0))
+
+
+def generate_session(sc: Scenario, patient_id: str, rng: np.random.Generator, start: datetime,
+                     baseline: dict | None = None):
     n = sc.duration_s
     session_id = f"{patient_id}_{sc.name}"
 
-    # Patient baseline: varies between patients, fixed within a session.
-    hr0 = rng.uniform(62, 74)
-    rmssd0 = rng.uniform(35, 55)
-    eda0 = rng.uniform(1.0, 3.0)
-    temp0 = rng.uniform(33.2, 34.0)
+    # Patient baseline plus small day-to-day variation.
+    base = baseline or draw_patient_baseline(rng)
+    hr0 = base["hr0"] + rng.normal(0, 1.5)
+    rmssd0 = base["rmssd0"] * (1 + rng.normal(0, 0.05))
+    eda0 = base["eda0"] * (1 + rng.normal(0, 0.1))
+    temp0 = base["temp0"] + rng.normal(0, 0.15)
 
     hr_t = hr0 + _slow_wander(rng, n, 2.0, 120)
     rmssd_f = np.ones(n)
@@ -416,11 +424,12 @@ def generate_all(seed: int, n_patients: int, scenarios: list[Scenario] | None = 
     frames, events = [], []
     for p_idx in range(n_patients):
         patient_id = f"SIM{p_idx + 1:02d}"
+        patient_base = draw_patient_baseline(np.random.default_rng([seed, p_idx, 10_000]))
         for sc_idx, sc in enumerate(scenarios):
             # Independent stream per (patient, scenario): adding a scenario does not change the others.
             rng = np.random.default_rng([seed, p_idx, sc_idx])
             start = base + timedelta(days=sc_idx, hours=p_idx)  # scenario 0 (normal) is each patient's first session
-            df, ev = generate_session(sc, patient_id, rng, start)
+            df, ev = generate_session(sc, patient_id, rng, start, patient_base)
             frames.append(df)
             events.extend(ev)
     return frames, pd.DataFrame(events), scenarios

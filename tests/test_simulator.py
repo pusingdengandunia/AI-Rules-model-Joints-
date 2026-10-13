@@ -97,3 +97,11 @@ def test_reproducible_and_seed_dependent():
 def test_patients_have_different_baselines(sessions):
     hrs = [baseline(sessions[(p, "normal")]).heart_rate.mean() for p in ("SIM01", "SIM02")]
     assert abs(hrs[0] - hrs[1]) > 1
+
+
+def test_patient_baseline_is_stable_across_sessions(sessions):
+    # Resting HR of one patient may drift a little day to day, not jump like a different person.
+    for pid in ("SIM01", "SIM02"):
+        hrs = [baseline(sessions[(pid, sc)]).heart_rate.median()
+               for sc in ("normal", "hr_elevation", "hrv_drop", "missing_data", "bad_quality")]
+        assert max(hrs) - min(hrs) < 7, (pid, hrs)

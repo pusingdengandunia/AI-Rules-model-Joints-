@@ -24,8 +24,8 @@ Schema 1.0. Window 5 menit, langkah 60 s, `good` jika `valid_sample_ratio` ≥ 0
 
 | quality_flag | records |
 |---|---|
-| good | 83407 |
-| missing_value | 2042 |
+| good | 83405 |
+| missing_value | 2044 |
 | late | 180 |
 | duplicate | 99 |
 | out_of_order | 99 |
@@ -38,7 +38,7 @@ Semua issue:
 
 | issue | records |
 |---|---|
-| missing_value | 2042 |
+| missing_value | 2044 |
 | out_of_order | 279 |
 | late | 180 |
 | duplicate | 99 |
@@ -48,9 +48,9 @@ Semua issue:
 | out_of_range:heart_rate | 9 |
 | naive_timezone | 9 |
 | missing_patient_id | 9 |
+| out_of_range:hrv_rmssd | 3 |
 | out_of_range:accel_x | 3 |
 | non_numeric:heart_rate | 3 |
-| out_of_range:hrv_rmssd | 3 |
 
 
 ### Deteksi gangguan yang disuntikkan (skenario `bad_quality`)
@@ -94,9 +94,9 @@ Terdeteksi dengan issue yang sesuai: **330/330**.
 | SIM03_hr_elevation | 3600 | 60.00 | 1.00 | 0 | 0 | 0.00 | 56 | 0 | 1.00 | 1.00 |
 | SIM03_hrv_drop | 3600 | 60.00 | 1.00 | 0 | 0 | 0.00 | 56 | 0 | 1.00 | 1.00 |
 | SIM03_high_activity | 3600 | 60.00 | 1.00 | 0 | 0 | 0.00 | 56 | 0 | 1.00 | 1.00 |
-| SIM03_missing_data | 3480 | 60.00 | 1.00 | 1 | 0 | 0.11 | 56 | 9 | 0.86 | 0.84 |
+| SIM03_missing_data | 3480 | 60.00 | 1.00 | 1 | 0 | 0.10 | 56 | 9 | 0.86 | 0.84 |
 | SIM03_bad_quality | 3592 | 60.00 | 1.00 | 0 | 0 | 0.00 | 56 | 0 | 1.00 | 1.00 |
-| SIM03_mixed_demo | 7110 | 120.00 | 1.00 | 1 | 0 | 0.04 | 116 | 7 | 0.94 | 0.94 |
+| SIM03_mixed_demo | 7110 | 120.00 | 1.00 | 1 | 0 | 0.04 | 116 | 7 | 0.94 | 0.93 |
 
 
 ## 4. Gap (periode tanpa record)
@@ -119,9 +119,9 @@ Metode `calibration`. Median `hr_mean` / `hrv_rmssd_mean` dari window `good` dal
 
 | patient_id | hr_baseline | hrv_baseline | n_windows | valid | period_start | period_end |
 |---|---|---|---|---|---|---|
-| SIM01 | 70.96 | 44.23 | 26 | True | 2026-01-05 02:00:00+00:00 | 2026-01-05 02:30:00+00:00 |
-| SIM02 | 72.88 | 42.35 | 26 | True | 2026-01-05 03:00:00+00:00 | 2026-01-05 03:30:00+00:00 |
-| SIM03 | 65.63 | 53.68 | 26 | True | 2026-01-05 04:00:00+00:00 | 2026-01-05 04:30:00+00:00 |
+| SIM01 | 64.30 | 47.05 | 26 | True | 2026-01-05 02:00:00+00:00 | 2026-01-05 02:30:00+00:00 |
+| SIM02 | 69.24 | 45.70 | 26 | True | 2026-01-05 03:00:00+00:00 | 2026-01-05 03:30:00+00:00 |
+| SIM03 | 66.33 | 46.33 | 26 | True | 2026-01-05 04:00:00+00:00 | 2026-01-05 04:30:00+00:00 |
 
 
 ## Keterbatasan
