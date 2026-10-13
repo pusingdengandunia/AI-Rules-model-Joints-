@@ -1,0 +1,12 @@
+# Generated data (rebuild with: python -m src.pipeline --source all)
+data/
+
+# Trained models are rebuilt by src/ml/train.py; model_card.json is kept
+models/*.joblib
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
