@@ -92,12 +92,28 @@ def _pct_change(value, base) -> float | None:
     return (value - base) / base * 100.0
 
 
+def _diff(value, base) -> float | None:
+    if value is None or base is None or (isinstance(base, float) and math.isnan(base)):
+        return None
+    if isinstance(value, float) and math.isnan(value):
+        return None
+    return value - base
+
+
 def apply_baseline(feats: dict, baseline: dict | None) -> dict:
-    """Add hr_delta_pct / hrv_delta_pct relative to a personal baseline (None if no valid baseline)."""
+    """Add deltas relative to a personal baseline.
+
+    hr_delta_pct / hrv_delta_pct (percent) need a *valid* HR baseline.
+    eda_delta (uS) / skin_temp_delta (degC) are absolute differences; they only need their own
+    baseline value, because EDA and temperature do not depend on the PPG quality gate.
+    """
     out = dict(feats)
-    ok = bool(baseline) and baseline.get("valid", False)
-    out["hr_delta_pct"] = _pct_change(feats.get("hr_mean"), baseline.get("hr_baseline")) if ok else None
-    out["hrv_delta_pct"] = _pct_change(feats.get("hrv_rmssd_mean"), baseline.get("hrv_baseline")) if ok else None
+    b = baseline or {}
+    ok = bool(b) and b.get("valid", False)
+    out["hr_delta_pct"] = _pct_change(feats.get("hr_mean"), b.get("hr_baseline")) if ok else None
+    out["hrv_delta_pct"] = _pct_change(feats.get("hrv_rmssd_mean"), b.get("hrv_baseline")) if ok else None
+    out["eda_delta"] = _diff(feats.get("eda_mean"), b.get("eda_baseline"))
+    out["skin_temp_delta"] = _diff(feats.get("skin_temp_mean"), b.get("skin_temp_baseline"))
     return out
 
 
@@ -168,6 +184,8 @@ def compute_baselines(features: pd.DataFrame, mode: str) -> tuple[pd.DataFrame, 
             patient_id=pid,
             hr_baseline=hr_b,
             hrv_baseline=_f(hrv_vals.median()) if len(hrv_vals) >= BASELINE_MIN_WINDOWS else None,
+            eda_baseline=_f(g["eda_mean"].median()) if g["eda_mean"].notna().any() else None,
+            skin_temp_baseline=_f(g["skin_temp_mean"].median()) if g["skin_temp_mean"].notna().any() else None,
             n_windows=int(len(g)),
             valid=bool(len(g) >= BASELINE_MIN_WINDOWS and hr_b is not None),
             method=mode,
@@ -198,9 +216,10 @@ def build_feature_table(clean: pd.DataFrame, baseline_mode: str = "calibration",
         period = pd.Series(False, index=feats.index)
     feats["is_baseline_period"] = period.to_numpy()
     lookup = baselines.set_index("patient_id").to_dict("index")
-    deltas = [apply_baseline(r, lookup.get(r["patient_id"])) for r in feats[["patient_id", "hr_mean", "hrv_rmssd_mean"]].to_dict("records")]
-    feats["hr_delta_pct"] = [d["hr_delta_pct"] for d in deltas]
-    feats["hrv_delta_pct"] = [d["hrv_delta_pct"] for d in deltas]
+    base_cols = ["patient_id", "hr_mean", "hrv_rmssd_mean", "eda_mean", "skin_temp_mean"]
+    deltas = [apply_baseline(r, lookup.get(r["patient_id"])) for r in feats[base_cols].to_dict("records")]
+    for col in ("hr_delta_pct", "hrv_delta_pct", "eda_delta", "skin_temp_delta"):
+        feats[col] = [d[col] for d in deltas]
 
     gt_cols = [c for c in feats.columns if c.startswith(GROUND_TRUTH_PREFIX)]
     return feats[FEATURE_TABLE_COLUMNS + gt_cols], baselines

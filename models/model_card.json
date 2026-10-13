@@ -1,0 +1,75 @@
+{
+  "model_version": "wesad_stress_logreg_eda_v1",
+  "created_at": "2026-10-13T15:05:41+00:00",
+  "target": "Target B: acute lab stress (WESAD TSST) vs baseline/amusement/meditation. NOT PTSD episodes.",
+  "intended_use": "Exploratory comparison only. The demo default stays rules_v1 (docs/ml_target.md).",
+  "estimator": "LogisticRegression",
+  "features": [
+    "eda_mean",
+    "eda_delta",
+    "accel_magnitude_std"
+  ],
+  "feature_set": "eda",
+  "threshold": 0.5,
+  "positive_class": "stress",
+  "output_mapping": {
+    "1": "monitor (reason: model_stress_pattern)",
+    "0": "normal"
+  },
+  "risk_score": "null: predict_proba is not calibrated and is not shown as risk",
+  "training_data": {
+    "dataset": "WESAD wrist (Empatica E4)",
+    "subjects": 15,
+    "windows": 657,
+    "stress_windows": 169,
+    "file": "data/ml/wesad_dataset.csv",
+    "builder": "src/ml/dataset.py"
+  },
+  "evaluation": {
+    "method": "leave-one-subject-out (15 folds), mean +- std over folds",
+    "f1": [
+      0.782,
+      0.145
+    ],
+    "precision": [
+      0.764,
+      0.205
+    ],
+    "recall": [
+      0.859,
+      0.159
+    ],
+    "false_alarm_rate": [
+      0.131,
+      0.167
+    ],
+    "auc": [
+      0.958,
+      0.061
+    ],
+    "confusion_matrix_pooled": {
+      "tn": 423,
+      "fp": 65,
+      "fn": 24,
+      "tp": 145
+    },
+    "baselines": {
+      "always_stress_f1": 0.409,
+      "rules_v1_f1": 0.04,
+      "rules_v1_coverage_on_stress_windows": 0.065,
+      "time_only_probe_best_f1": 0.733
+    }
+  },
+  "limitations": [
+    "15 healthy subjects, lab protocol with fixed order; results are exploratory.",
+    "Wrist PPG HR is mostly unavailable during the stress task; HR features come from the calmest seconds.",
+    "Fixed protocol order: time since start alone reaches a similar F1 with a non-linear model (see time_only_probe_best_f1). Part of any score may reflect protocol timing, not physiology.",
+    "accel_magnitude_std is higher during the stress task partly because subjects talk and gesture (TSST).",
+    "Not validated for PTSD, clinical use, or free-living data."
+  ],
+  "versions": {
+    "sklearn": "1.9.0",
+    "pandas": "3.0.1",
+    "numpy": "2.4.0"
+  }
+}

@@ -66,8 +66,8 @@ Rata-rata `valid_sample_ratio`: baseline 0.59, stress 0.18, amusement 0.63, medi
 | set | fitur |
 |---|---|
 | hr | hr_mean, hr_std, hr_delta_pct, accel_magnitude_std |
-| hr_eda | hr_mean, hr_std, hr_delta_pct, accel_magnitude_std, eda_mean, eda_delta, skin_temp_delta |
-| eda | eda_mean, eda_delta, skin_temp_delta, accel_magnitude_std |
+| hr_eda | hr_mean, hr_std, hr_delta_pct, accel_magnitude_std, eda_mean, eda_delta |
+| eda | eda_mean, eda_delta, accel_magnitude_std |
 
 
 Fitur yang dikeluarkan:
@@ -79,7 +79,8 @@ Fitur yang dikeluarkan:
 | hrv_delta_pct | same as hrv_rmssd_mean |
 | hrv_valid_ratio | missingness = label leak |
 | accel_valid_ratio | not informative (always ~1) |
-| skin_temp_mean | absolute level is person-specific; skin_temp_delta is used instead |
+| skin_temp_mean | absolute level is person-specific |
+| skin_temp_delta | drifts with time since session start (protocol-order confound); LOSO ablation: F1 0.79 with vs 0.77 without (within 1 std), so no real gain |
 | staleness_s | PPG-quality indicator, same leak as valid_sample_ratio |
 | gt_* | ground truth / ECG reference, never a feature |
 
@@ -98,7 +99,7 @@ Fitur yang dikeluarkan:
 
 ## Risiko yang tetap ada
 
-- Urutan protokol tetap (baseline selalu pertama). `skin_temp_delta` bisa ikut menangkap waktu sejak mulai.
+- Urutan protokol tetap (baseline selalu pertama, stress di waktu yang mirip). Waktu sejak mulai saja sudah memprediksi stress dengan baik (lihat probe di `reports/ml_eval_wesad.md`). `skin_temp_delta` dikeluarkan karena alasan ini.
 - HR saat stress dihitung hanya dari detik yang lolos gate SQI (momen paling tenang), sehingga cenderung under-estimate.
 - Window bertumpuk 4 menit: split wajib per subjek (`groups = patient_id`).
 - Baseline HR S10 dan S15 tidak valid, sehingga `hr_delta_pct` mereka kosong (kosong karena subjek, bukan karena label).

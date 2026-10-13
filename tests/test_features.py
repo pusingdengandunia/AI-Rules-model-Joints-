@@ -50,6 +50,13 @@ def test_delta_pct_relative_to_personal_baseline():
     assert feats.loc[feats["is_baseline_period"], "window_end"].max() <= pd.Timestamp("2026-01-05T08:30:00Z")
 
 
+def test_eda_and_temp_deltas_use_their_own_baseline():
+    base = {"valid": False, "hr_baseline": None, "eda_baseline": 2.0, "skin_temp_baseline": 33.0}
+    f = apply_baseline({"hr_mean": 80.0, "eda_mean": 3.5, "skin_temp_mean": 32.5}, base)
+    assert f["hr_delta_pct"] is None              # HR baseline invalid
+    assert f["eda_delta"] == 1.5 and f["skin_temp_delta"] == -0.5  # still available
+
+
 def test_too_few_samples_gives_none_not_zero():
     rows = make_records(n=1)
     f = summarize_window(rows, expected_samples=300)

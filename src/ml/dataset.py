@@ -8,8 +8,8 @@ Decisions (details and numbers in reports/wesad_dataset_summary.md):
   - Excluded features, because their *missingness* encodes the label (PPG fails while
     subjects talk and gesture during the stress task) rather than physiology:
       valid_sample_ratio, hrv_rmssd_mean, hrv_delta_pct (and the other *_ratio columns).
-  - Added: eda_delta and skin_temp_delta relative to each subject's calibration windows,
-    mirroring hr_delta_pct (absolute EDA/temperature levels differ a lot between people).
+  - eda_delta and skin_temp_delta come from the feature table (src/features/engineer.py,
+    apply_baseline), so training and online inference compute them with the same code.
   - Split must be by subject (groups = patient_id); windows overlap by 4 minutes.
 
 Run: python -m src.ml.dataset
@@ -32,10 +32,10 @@ MIN_PURITY = 0.9
 FEATURE_SETS = {
     # Wrist HR + movement. HR uses the seconds that passed the PPG quality gate.
     "hr": ["hr_mean", "hr_std", "hr_delta_pct", "accel_magnitude_std"],
-    # HR plus electrodermal activity and skin temperature (also on the E4 wrist).
-    "hr_eda": ["hr_mean", "hr_std", "hr_delta_pct", "accel_magnitude_std", "eda_mean", "eda_delta", "skin_temp_delta"],
+    # HR plus electrodermal activity (also on the E4 wrist).
+    "hr_eda": ["hr_mean", "hr_std", "hr_delta_pct", "accel_magnitude_std", "eda_mean", "eda_delta"],
     # No PPG at all: immune to the PPG-missingness leak.
-    "eda": ["eda_mean", "eda_delta", "skin_temp_delta", "accel_magnitude_std"],
+    "eda": ["eda_mean", "eda_delta", "accel_magnitude_std"],
 }
 
 EXCLUDED = {
@@ -44,7 +44,9 @@ EXCLUDED = {
     "hrv_delta_pct": "same as hrv_rmssd_mean",
     "hrv_valid_ratio": "missingness = label leak",
     "accel_valid_ratio": "not informative (always ~1)",
-    "skin_temp_mean": "absolute level is person-specific; skin_temp_delta is used instead",
+    "skin_temp_mean": "absolute level is person-specific",
+    "skin_temp_delta": "drifts with time since session start (protocol-order confound); "
+                       "LOSO ablation: F1 0.79 with vs 0.77 without (within 1 std), so no real gain",
     "staleness_s": "PPG-quality indicator, same leak as valid_sample_ratio",
     "gt_*": "ground truth / ECG reference, never a feature",
 }
@@ -52,24 +54,17 @@ EXCLUDED = {
 META = ["patient_id", "window_start", "window_end", "gt_label", "gt_label_purity", "data_quality"]
 
 
-def add_signal_deltas(feats: pd.DataFrame) -> pd.DataFrame:
-    """eda_delta (uS) and skin_temp_delta (degC) vs the median of each subject's calibration windows."""
-    out = feats.copy()
-    calib = out[out["is_baseline_period"]].groupby("patient_id")[["eda_mean", "skin_temp_mean"]].median()
-    out["eda_delta"] = out["eda_mean"] - out["patient_id"].map(calib["eda_mean"])
-    out["skin_temp_delta"] = out["skin_temp_mean"] - out["patient_id"].map(calib["skin_temp_mean"])
-    return out
-
-
 def build_wesad_dataset(feats: pd.DataFrame) -> pd.DataFrame:
     """Feature table -> training rows with y (1 = stress) and every candidate feature."""
-    feats = add_signal_deltas(feats)
-    keep = (feats["gt_label"].isin(CLASSES) & (feats["gt_label_purity"] >= MIN_PURITY)
+    keep =(feats["gt_label"].isin(CLASSES) & (feats["gt_label_purity"] >= MIN_PURITY)
             & ~feats["is_baseline_period"].astype(bool))
     ds = feats.loc[keep].copy()
     ds["y"] = (ds["gt_label"] == POSITIVE).astype(int)
     all_features = sorted({f for fs in FEATURE_SETS.values() for f in fs})
-    return ds[META + all_features + ["y"]].reset_index(drop=True)
+    # minutes_since_start is NOT a model feature: train.py uses it to probe the protocol-order confound.
+    start = feats.groupby("patient_id")["window_start"].transform("min")
+    ds["minutes_since_start"] = (ds["window_start"] - start.loc[ds.index]).dt.total_seconds() / 60
+    return ds[META + all_features + ["minutes_since_start", "y"]].reset_index(drop=True)
 
 
 def load(path: Path = OUT_PATH) -> pd.DataFrame:
@@ -96,8 +91,8 @@ def write_summary(feats: pd.DataFrame, ds: pd.DataFrame, path: Path) -> None:
     per_subject["_n"] = per_subject["patient_id"].str.extract(r"(\d+)$").astype(int)
     per_subject = per_subject.sort_values("_n").drop(columns="_n")
 
-    cand = sorted({f for fs in FEATURE_SETS.values() for f in fs} | {"valid_sample_ratio", "hrv_rmssd_mean"})
-    miss = add_signal_deltas(feats).loc[base.index].groupby("gt_label")[cand].apply(lambda d: d.isna().mean()).T
+    cand = sorted({f for fs in FEATURE_SETS.values() for f in fs} | {"valid_sample_ratio", "hrv_rmssd_mean", "skin_temp_delta"})
+    miss = base.groupby("gt_label")[cand].apply(lambda d: d.isna().mean()).T
     miss = miss.reindex(columns=CLASSES).round(2).reset_index().rename(columns={"index": "feature"})
     vsr = base.groupby("gt_label")["valid_sample_ratio"].mean().reindex(CLASSES).round(2)
 
@@ -141,7 +136,8 @@ def write_summary(feats: pd.DataFrame, ds: pd.DataFrame, path: Path) -> None:
         "| Tidak ada fitur yang membocorkan label | missingness-leak dibuang; `gt_*` tidak dipakai |",
         "",
         "## Risiko yang tetap ada\n",
-        "- Urutan protokol tetap (baseline selalu pertama). `skin_temp_delta` bisa ikut menangkap waktu sejak mulai.",
+        "- Urutan protokol tetap (baseline selalu pertama, stress di waktu yang mirip). Waktu sejak mulai saja sudah "
+        "memprediksi stress dengan baik (lihat probe di `reports/ml_eval_wesad.md`). `skin_temp_delta` dikeluarkan karena alasan ini.",
         "- HR saat stress dihitung hanya dari detik yang lolos gate SQI (momen paling tenang), sehingga cenderung under-estimate.",
         "- Window bertumpuk 4 menit: split wajib per subjek (`groups = patient_id`).",
         "- Baseline HR S10 dan S15 tidak valid, sehingga `hr_delta_pct` mereka kosong (kosong karena subjek, bukan karena label).",

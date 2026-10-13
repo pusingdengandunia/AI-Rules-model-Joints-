@@ -102,6 +102,8 @@ FEATURE_TABLE_COLUMNS = [
     "accel_valid_ratio",
     "eda_mean",
     "skin_temp_mean",
+    "eda_delta",
+    "skin_temp_delta",
     "n_samples",
     "staleness_s",
     "data_quality",
