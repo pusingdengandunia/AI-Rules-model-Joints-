@@ -20,7 +20,7 @@ Kenapa tidak melatih ML di data sintetis: labelnya dibuat dari aturan simulator.
 ## 2. Unit prediksi
 
 - Satu prediksi per **window 5 menit**, dihitung tiap **1 menit**.
-- Input: satu baris fitur dari `compute_window_features()` (lihat `docs/data_contract.md` §4).
+- Input: satu baris fitur dari `compute_window_features()` (lihat `docs/data_contract.md` Bagian 4).
 - Fitur model (`MODEL_FEATURES`, urutan tetap): `hr_mean, hr_std, hr_delta_pct, hrv_rmssd_mean, hrv_delta_pct, accel_magnitude_std, valid_sample_ratio`.
   - Target B membuang `valid_sample_ratio`, karena HR yang hilang di WESAD berkorelasi dengan stress (artefak gerak). Model bisa mempelajari "sensor gagal", bukan fisiologi.
 - Rules boleh memakai riwayat status window sebelumnya (persistensi). Model ML hanya memakai satu window.
@@ -67,7 +67,7 @@ Pemetaan ke label evaluasi sintetis:
 ### Target A (sintetis, rules)
 
 - Dihitung **per event** (pakai `data/raw/synthetic/events.csv`), bukan per window.
-  - Event terdeteksi jika ada status yang sesuai (lihat §3) di window yang overlap dengan `start_s .. peak_end_s + 120 s`.
+  - Event terdeteksi jika ada status yang sesuai (lihat Bagian 3) di window yang overlap dengan `start_s .. peak_end_s + 120 s`.
 - False alarm = `monitor`/`elevated` di luar window event `arousal`/`hrv_drop` dan masa recovery-nya. Dilaporkan per jam data.
 - Pemisahan tuning/tes: ambang disetel di pasien SIM01–SIM02, dilaporkan di SIM03 (atau pasien baru yang di-generate).
 
@@ -110,7 +110,7 @@ Teks app yang disarankan:
 
 ## 7. Yang perlu disetujui tim
 
-1. Dua target terpisah seperti di atas, dengan rules sebagai default demo.
-2. Empat kategori output dan teks app di §6.
-3. Kontrak output di §4, termasuk `risk_score = null`.
-4. Kriteria sukses Target A di §5.
+1. Dua target terpisah (Bagian 1), dengan rules sebagai default demo.
+2. Empat kategori output (Bagian 3) dan teks app untuk caregiver (Bagian 6).
+3. Kontrak output di Bagian 4, termasuk `risk_score = null`.
+4. Kriteria sukses Target A di Bagian 5.
