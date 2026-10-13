@@ -84,6 +84,7 @@ Satu baris per window. Urutan kolom tetap (`FEATURE_TABLE_COLUMNS`):
 | `valid_sample_ratio` | HR valid / sampel yang diharapkan |
 | `hrv_valid_ratio`, `accel_valid_ratio` | sama, untuk RMSSD dan akselerasi |
 | `eda_mean`, `skin_temp_mean` | sinyal tambahan |
+| `eda_delta`, `skin_temp_delta` | selisih absolut (µS, °C) terhadap baseline EDA/suhu pasien; tidak butuh baseline HR yang valid |
 | `n_samples` | record di dalam window |
 | `staleness_s` | detik sejak HR valid terbaru sampai `window_end` |
 | `data_quality` | `good` / `insufficient_data` |
@@ -95,7 +96,7 @@ Satu baris per window. Urutan kolom tetap (`FEATURE_TABLE_COLUMNS`):
 
 ### Baseline pribadi
 
-Median `hr_mean` dan `hrv_rmssd_mean` dari window `good` dalam periode kalibrasi. Baseline valid jika ada minimal 5 window. Disimpan di `data/baselines/<source>_baselines.json`.
+Median `hr_mean`, `hrv_rmssd_mean`, `eda_mean`, dan `skin_temp_mean` dari window `good` dalam periode kalibrasi. Baseline valid jika ada minimal 5 window. Disimpan di `data/baselines/<source>_baselines.json`.
 
 | Mode | Dipakai untuk | Periode kalibrasi |
 |---|---|---|

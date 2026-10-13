@@ -1,28 +1,36 @@
-# PTSD Guardian MVP — Data Engineering
+# PTSD Guardian MVP — Data Engineering & ML
 
-Pipeline data untuk spec `../PTSD_Guardian_MVP_ML_Data_Engineering.md` Step 1–5: sumber data, skema, validasi, preprocessing, dan feature engineering. Pipeline ini menerima data sensor dari simulator (Jalur A) atau WESAD (Jalur B), lalu menghasilkan tabel fitur per window untuk ML engineer dan backend.
+Implementasi spec `../PTSD_Guardian_MVP_ML_Data_Engineering.md` Step 1–10 (Data Engineering, rules, model, inference) plus gladi bersih offline. Integrasi API (Step 11+) belum dibuat.
 
-> Hasil sistem adalah estimasi pola fisiologis, bukan diagnosis PTSD. Data simulasi menguji pipeline dan demo; data simulasi tidak membuktikan akurasi klinis. WESAD berisi stres akut di lab, bukan episode PTSD.
+> Hasil sistem adalah estimasi pola fisiologis, bukan diagnosis PTSD. Data simulasi membuktikan alur dan logika, bukan akurasi klinis. WESAD berisi stres akut di lab, bukan episode PTSD.
 
-## Quick start
+## Menjalankan dari nol
 
 ```bash
 pip install -r requirements.txt
 
-# Jalur A: data simulasi -> pipeline
-python -m src.pipeline --source synthetic --regenerate
+# 1. Data Engineering
+python -m src.pipeline --source synthetic --regenerate                              # Jalur A (~30 s)
+python -m src.pipeline --source wesad --wesad-root D:/jointsHackathon/WESAD/WESAD   # Jalur B, sekali (~15 menit, ~2 GB RAM)
+python -m src.pipeline --source all                                                 # jalankan ulang keduanya kapan saja
 
-# Jalur B: WESAD (konversi pkl satu kali, ~1 menit per subjek, butuh ~2 GB RAM bebas)
-python -m src.pipeline --source wesad --wesad-root D:/jointsHackathon/WESAD/WESAD
+# 2. Rules (Target A) — evaluasi per event di data sintetis
+python -m src.ml.evaluate_rules           # pakai RULES_CONFIG
+python -m src.ml.evaluate_rules --tune    # grid search ulang (tune SIM01-02, tes SIM03 + holdout seed 7)
 
-# Setelah konversi: jalankan ulang keduanya
-python -m src.pipeline --source all
+# 3. Model (Target B) — eksperimen WESAD
+python -m src.ml.dataset                  # data/ml/wesad_dataset.csv
+python -m src.ml.train                    # LOSO, models/model.joblib + model_card.json
 
-# Tests
+# 4. Gladi bersih offline (gerbang sebelum integrasi)
+python -m src.ml.simulate_stream          # rules (default demo)
+python -m src.ml.simulate_stream --mode model
+
+# Tests (88)
 python -m pytest -q
 ```
 
-Stream data simulasi ke backend (kolom `gt_*` dibuang):
+Stream data simulasi ke backend nanti (kolom `gt_*` dibuang):
 
 ```bash
 python -m src.simulator.replay data/raw/synthetic/SIM01_mixed_demo.csv --speed 30 --post http://localhost:8000/ingest
@@ -32,58 +40,62 @@ python -m src.simulator.replay data/raw/synthetic/SIM01_mixed_demo.csv --speed 3
 
 ```
 src/
-  schema.py                 kontrak data: kolom, batas, flag, konfigurasi window, urutan fitur
-  simulator/                Jalur A: generate.py, replay.py, plot.py
+  schema.py                 kontrak data: kolom, batas, flag, window, urutan fitur
+  simulator/                Jalur A: generate.py (7 skenario), replay.py, plot.py
   sources/wesad.py          Jalur B: SX.pkl -> skema proyek (unpickler aman, timestamp absolut)
   signals/beats.py          deteksi detak PPG/ECG, SQI, HR dan RMSSD dari detak
   ingestion/validate.py     Step 3: quality_flag per record
   preprocessing/clean.py    Step 4: clean series, sesi, gap, window
-  features/engineer.py      Step 5: fitur per window + baseline pribadi (batch dan online)
-  pipeline.py               runner + laporan kualitas data
-tests/                      52 test (validasi, clean, fitur, simulator, sinyal)
-docs/data_contract.md       kontrak data lengkap + cara pakai untuk ML/backend
-docs/jalur_b_datasets.md    survei dataset publik + audit WESAD (lisensi, alignment, leakage)
-data/                       output (lihat di bawah)
-reports/                    data_quality_<source>.md, plots/synthetic/*.png
+  features/engineer.py      Step 5: fitur per window + baseline pribadi (batch = online)
+  pipeline.py               runner Data Engineering + laporan kualitas
+  ml/rules.py               Step 7: rules_v1 (RuleEngine)
+  ml/evaluate_rules.py      Step 7: evaluasi per event + tuning
+  ml/dataset.py             Step 8: dataset WESAD (filter, feature set bebas leakage)
+  ml/train.py               Step 9: LOSO, perbandingan, model card
+  ml/predict.py             Step 10: Predictor / predict_risk (rules atau model, kontrak sama)
+  ml/simulate_stream.py     gladi bersih: stream -> validate -> fitur -> prediksi -> notifikasi
+tests/                      88 test
+docs/
+  data_contract.md          kontrak data dan cara pakai fungsi
+  ml_target.md              target prediksi, kategori output, kontrak output, batas klaim
+  jalur_b_datasets.md       survei dataset + audit WESAD
+models/model_card.json      model WESAD terpilih (model.joblib dibuat ulang oleh train.py)
+reports/                    semua laporan (lihat tabel di bawah)
+data/                       output pipeline (tidak di-commit; dibuat ulang)
 ```
 
-## Output pipeline (spec "Output Data Engineering")
+## Laporan
 
-| Deliverable spec | File |
+| File | Isi |
 |---|---|
-| Dataset mentah tervalidasi | `data/validated/<source>_validated.csv` |
-| Time-series yang dibersihkan | `data/clean/<source>_clean.csv`, `data/clean/<source>_gaps.csv` |
-| Tabel fitur per window | `data/features/<source>_features.csv` |
-| Baseline pribadi | `data/baselines/<source>_baselines.json` |
-| Dokumentasi kualitas dan missing data | `reports/data_quality_<source>.md` |
-| Fungsi untuk ML engineer | `validate_sensor_data`, `clean_sensor_data`, `build_feature_table`, `compute_window_features` (lihat `docs/data_contract.md` §5) |
+| `reports/data_quality_synthetic.md`, `reports/data_quality_wesad.md` | kualitas data, missing data, gap, baseline, akurasi HR wrist vs ECG |
+| `reports/rules_eval_synthetic.md` | evaluasi rules per event, hasil tuning |
+| `reports/wesad_dataset_summary.md` | filter, distribusi kelas, alasan pemilihan fitur |
+| `reports/ml_eval_wesad.md` | perbandingan model vs rules vs baseline naif, probe confound |
+| `reports/stream_rehearsal_rules.md` | gladi bersih: cek skenario A/B/C, notifikasi |
+| `reports/stream/*.png` | timeline status per sesi |
 
-Input mentah: `data/raw/synthetic/*.csv` (+ `events.csv`, `manifest.json`) dan `data/raw/wesad/WESAD_S*.csv` (+ `conversion_report.json`).
+## Hasil utama
 
-## Skenario simulasi (Jalur A)
-
-| Skenario | Isi | Ekspektasi |
-|---|---|---|
-| `normal` | Istirahat + 2 aktivitas ringan | tidak ada alert |
-| `hr_elevation` | HR +25–35 bpm saat diam, RMSSD turun, EDA naik | `alert` |
-| `hrv_drop` | RMSSD turun ke ~45%, HR hanya +5–10 bpm | `warning` |
-| `high_activity` | Olahraga 15 menit, akselerasi tinggi | tidak ada alert (confounder) |
-| `missing_data` | Disconnect 2 menit (tanpa record), off-wrist 5 menit (HR null), dropout, artefak gerak | tidak ada alert; `insufficient_data` |
-| `bad_quality` | Batch terlambat, duplikat kirim-ulang, timestamp rusak/tanpa zona, patient_id kosong, nilai di luar batas/non-numerik | tidak ada alert; semua gangguan terdeteksi validator |
-| `mixed_demo` | 2 jam gabungan semua kasus | demo end-to-end |
-
-Pemetaan ke tiga skenario demo di spec §7: A = `normal`, B = `hr_elevation` / `hrv_drop` (pembanding: `high_activity`), C = `missing_data`.
+| Komponen | Hasil |
+|---|---|
+| Validasi | 330/330 gangguan sintetis tertangkap |
+| Rules `rules_v1` (sintetis, pasien tes + holdout) | recall arousal 100%, hrv_drop 100%, 0 false alarm, 100% gap = `insufficient_data` |
+| Model WESAD terbaik (`logreg__eda`, LOSO) | F1 0,78 ± 0,14, AUC 0,96 (naif 0,41; rules 0,04 karena HR wrist hilang saat stress) |
+| Gladi bersih rules | 27/27 cek lulus; 1 alert per episode, `device_check` 1 per gangguan |
+| Gladi bersih model | 15/27: model WESAD salah membaca olahraga sebagai stress → demo memakai rules |
 
 ## Keputusan desain penting
 
-- **Tidak ada yang dibuang diam-diam.** Validasi hanya memberi flag. Clean series mengeluarkan duplikat, timestamp invalid, dan record tanpa pasien; nilai di luar batas menjadi NaN. Semua jejak tetap ada di file `validated`.
-- **Missing ≠ normal.** Tidak ada `fillna(0)` atau interpolasi. Window menjadi `insufficient_data` kalau HR valid < 50% atau HR valid terbaru lebih tua dari 60 s.
-- **Satu kode untuk batch dan online.** `compute_window_features` memanggil fungsi yang sama dengan tabel fitur batch, dan kesamaannya diuji.
-- **HR wrist yang tidak bisa dipercaya dijadikan null.** Gate SQI PPG dikalibrasi terhadap ECG WESAD (MAE 10,0 → 3,8 bpm).
-- **Pickle WESAD dibuka dengan unpickler allow-list** (hanya array numpy), sehingga file yang dimanipulasi tidak bisa menjalankan kode.
+- **Tidak ada yang dibuang diam-diam.** Validasi hanya memberi flag; jejak lengkap di `data/validated`.
+- **Missing ≠ normal.** Window `insufficient_data` jika HR valid < 50% atau HR terbaru > 60 s. App tidak pernah menampilkan `normal` tanpa data `good`.
+- **Satu kode untuk batch dan online** (`compute_window_features`, `apply_baseline`), diuji sama persis.
+- **HR wrist yang tidak bisa dipercaya dijadikan null** (gate SQI dikalibrasi terhadap ECG).
+- **Rules adalah default demo.** Model WESAD tersedia lewat `Predictor("model")` untuk eksperimen; kalau model gagal dimuat, sistem otomatis kembali ke rules.
+- **Pickle WESAD dibuka dengan unpickler allow-list** sehingga file yang dimanipulasi tidak bisa menjalankan kode.
 
-## Batasan yang perlu diketahui tim
+## Batasan
 
-- WESAD: HR wrist hampir selalu hilang saat kondisi stress (11/169 window `good`). RMSSD wrist lemah korelasinya dengan ECG. Lihat `reports/data_quality_wesad.md` §7 dan `docs/jalur_b_datasets.md`.
-- Ambang (batas plausibilitas, 50% valid, 60 s staleness, baseline 30 menit) adalah aturan prototipe, bukan kriteria medis.
-- Step 6 ke atas (target, baseline rule `normal/monitor/elevated`, model, API) adalah bagian ML/integrasi dan belum dibuat di sini.
+- Semua ambang (rules, kualitas data, baseline) adalah aturan prototipe, bukan kriteria medis.
+- Rules dituning di data sintetis yang skenarionya dirancang sendiri; perlu dikalibrasi ulang dengan data perangkat nyata.
+- WESAD: 15 subjek sehat, urutan protokol tetap (waktu saja sudah memprediksi stress dengan F1 0,73 pada model non-linear); HR wrist hilang saat stress; HRV wrist belum tervalidasi.
