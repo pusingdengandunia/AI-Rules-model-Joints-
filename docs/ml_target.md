@@ -114,3 +114,49 @@ Teks app yang disarankan:
 2. Empat kategori output (Bagian 3) dan teks app untuk caregiver (Bagian 6).
 3. Kontrak output di Bagian 4, termasuk `risk_score = null`.
 4. Kriteria sukses Target A di Bagian 5.
+
+## 8. Anomali waktu tidur (hanya rules, Target A)
+
+Tambahan 2026-10-14. Hanya ada di `rules_v1` dan data sintetis. Model WESAD (Target B) tidak disentuh, karena WESAD tidak punya data tidur.
+
+**Jam tidur:** `window_end` dikonversi ke waktu lokal pasien (`PATIENT_TIMEZONE`, default `Asia/Jakarta`, atau kunci `timezone` di fitur window). Jam tidur = 22:00–06:00.
+
+| Kondisi di jam tidur | Syarat | Reason |
+|---|---|---|
+| Gelisah | `accel_magnitude_std` ≥ 0,08 g | `high_night_restlessness` |
+| HR tinggi saat diam | gerak < 0,08 g dan `hr_delta_pct` ≥ +15% | `sustained_night_arousal` |
+| Tidur tenang | selain itu | — (status `normal`) |
+
+| Durasi anomali | Status | Reasons |
+|---|---|---|
+| < 2 window × 5 menit (≈ 10 menit) | `monitor` | `sleep_disruption_candidate` |
+| ≥ 10 menit | `elevated_physiological_anomaly` | `sleep_disruption` + reason kondisi |
+
+Aturan penting:
+- `insufficient_data` tetap menang (data buruk atau baseline tidak valid).
+- Gerakan di jam tidur **tidak pernah** dianggap `activity`. Gerakan di luar jam tidur tetap `activity` → `normal`.
+- Durasi diukur dalam waktu, bukan jumlah window, karena window bertumpuk (5 menit, geser 1 menit). Bangun singkat < 5 menit hanya sampai `monitor`.
+- Pada stream 1 menit, `elevated` muncul setelah ~10 window anomali berturut-turut; pada window 5 menit tanpa tumpukan, di window ke-2.
+
+Teks app yang disarankan (non-medis):
+
+| Reason | Teks |
+|---|---|
+| `sleep_disruption_candidate` | Kemungkinan gangguan tidur — pantau |
+| `sleep_disruption` + `high_night_restlessness` | Gangguan pola tidur — gelisah saat jam istirahat |
+| `sleep_disruption` + `sustained_night_arousal` | Gangguan pola tidur — detak jantung tinggi saat jam istirahat |
+
+## 9. Mode prediksi: `rules`, `model`, `mix`
+
+| Mode | Cara kerja | Kapan dipakai |
+|---|---|---|
+| `rules` | `rules_v1` saja (siang + tidur) | **default demo** |
+| `model` | model WESAD saja (`normal`/`monitor`, tanpa `elevated`) | eksperimen |
+| `mix` | rules memutuskan; model hanya boleh menambah `monitor` saat rules bilang `normal` di siang hari dan pasien benar-benar diam (gerak < 0,03 g) | eksperimen "rules + petunjuk ML" |
+
+Aturan `mix`:
+- Rules `insufficient_data` / `monitor` / `elevated` → hasil rules dipakai. Reason `model_agrees` ditambahkan kalau model juga melihat pola stres.
+- Rules `normal` karena gerak, pemulihan setelah olahraga, atau jam tidur → tetap `normal`. Model WESAD membaca gerakan sebagai stres dan tidak mengenal tidur.
+- Rules `normal`, pasien benar-benar diam (`accel_magnitude_std` < 0,03 g) dan model melihat pola stres → `monitor` dengan reason `model_stress_pattern`. Batas gerak ini ada karena model WESAD belajar "gerak = stres" (subjek bergestur saat TSST); tanpa batas ini aktivitas ringan memicu `monitor` palsu.
+- Model sendirian tidak pernah menghasilkan `elevated`, jadi tidak pernah memicu notifikasi alert.
+- `model_version` = `mix:rules_v1+<versi model>`. Kalau model gagal dimuat → kembali ke rules (`fallback_rules`).

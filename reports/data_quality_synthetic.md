@@ -8,14 +8,14 @@ Schema 1.0. Window 5 menit, langkah 60 s, `good` jika `valid_sample_ratio` ≥ 0
 
 | Metrik | Nilai |
 |---|---|
-| Record masuk | 85869 |
-| Record usable (masuk clean series) | 85746 |
+| Record masuk | 139869 |
+| Record usable (masuk clean series) | 139746 |
 | Record dikeluarkan (duplicate / timestamp invalid / tanpa patient_id) | 123 |
 | Pasien | 3 |
-| Sesi | 21 |
+| Sesi | 24 |
 | Gap terdeteksi | 6 |
-| Window total | 1356 |
-| Window `good` | 1308 |
+| Window total | 2244 |
+| Window `good` | 2196 |
 | Window `insufficient_data` | 48 |
 
 ## 2. Quality flag per record
@@ -24,8 +24,8 @@ Schema 1.0. Window 5 menit, langkah 60 s, `good` jika `valid_sample_ratio` ≥ 0
 
 | quality_flag | records |
 |---|---|
-| good | 83405 |
-| missing_value | 2044 |
+| good | 137402 |
+| missing_value | 2047 |
 | late | 180 |
 | duplicate | 99 |
 | out_of_order | 99 |
@@ -38,7 +38,7 @@ Semua issue:
 
 | issue | records |
 |---|---|
-| missing_value | 2044 |
+| missing_value | 2047 |
 | out_of_order | 279 |
 | late | 180 |
 | duplicate | 99 |
@@ -83,6 +83,7 @@ Terdeteksi dengan issue yang sesuai: **330/330**.
 | SIM01_missing_data | 3480 | 60.00 | 1.00 | 1 | 0 | 0.11 | 56 | 9 | 0.86 | 0.84 |
 | SIM01_bad_quality | 3592 | 60.00 | 1.00 | 0 | 0 | 0.00 | 56 | 0 | 1.00 | 1.00 |
 | SIM01_mixed_demo | 7110 | 120.00 | 1.00 | 1 | 0 | 0.04 | 116 | 7 | 0.94 | 0.94 |
+| SIM01_sleep_disruption | 18000 | 300.00 | 1.00 | 0 | 0 | 0.00 | 296 | 0 | 1.00 | 1.00 |
 | SIM02_normal | 3600 | 60.00 | 1.00 | 0 | 0 | 0.00 | 56 | 0 | 1.00 | 1.00 |
 | SIM02_hr_elevation | 3600 | 60.00 | 1.00 | 0 | 0 | 0.00 | 56 | 0 | 1.00 | 1.00 |
 | SIM02_hrv_drop | 3600 | 60.00 | 1.00 | 0 | 0 | 0.00 | 56 | 0 | 1.00 | 1.00 |
@@ -90,6 +91,7 @@ Terdeteksi dengan issue yang sesuai: **330/330**.
 | SIM02_missing_data | 3480 | 60.00 | 1.00 | 1 | 0 | 0.10 | 56 | 9 | 0.86 | 0.84 |
 | SIM02_bad_quality | 3592 | 60.00 | 1.00 | 0 | 0 | 0.00 | 56 | 0 | 1.00 | 1.00 |
 | SIM02_mixed_demo | 7110 | 120.00 | 1.00 | 1 | 0 | 0.04 | 116 | 7 | 0.94 | 0.93 |
+| SIM02_sleep_disruption | 18000 | 300.00 | 1.00 | 0 | 0 | 0.00 | 296 | 0 | 1.00 | 1.00 |
 | SIM03_normal | 3600 | 60.00 | 1.00 | 0 | 0 | 0.00 | 56 | 0 | 1.00 | 1.00 |
 | SIM03_hr_elevation | 3600 | 60.00 | 1.00 | 0 | 0 | 0.00 | 56 | 0 | 1.00 | 1.00 |
 | SIM03_hrv_drop | 3600 | 60.00 | 1.00 | 0 | 0 | 0.00 | 56 | 0 | 1.00 | 1.00 |
@@ -97,6 +99,7 @@ Terdeteksi dengan issue yang sesuai: **330/330**.
 | SIM03_missing_data | 3480 | 60.00 | 1.00 | 1 | 0 | 0.10 | 56 | 9 | 0.86 | 0.84 |
 | SIM03_bad_quality | 3592 | 60.00 | 1.00 | 0 | 0 | 0.00 | 56 | 0 | 1.00 | 1.00 |
 | SIM03_mixed_demo | 7110 | 120.00 | 1.00 | 1 | 0 | 0.04 | 116 | 7 | 0.94 | 0.93 |
+| SIM03_sleep_disruption | 18000 | 300.00 | 1.00 | 0 | 0 | 0.00 | 296 | 0 | 1.00 | 1.00 |
 
 
 ## 4. Gap (periode tanpa record)

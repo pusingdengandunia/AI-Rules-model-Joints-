@@ -25,6 +25,7 @@ python -m src.ml.train                    # LOSO, models/model.joblib + model_ca
 # 4. Gladi bersih offline (gerbang sebelum integrasi)
 python -m src.ml.simulate_stream          # rules (default demo)
 python -m src.ml.simulate_stream --mode model
+python -m src.ml.simulate_stream --mode mix
 
 # Tests (88)
 python -m pytest -q
@@ -41,18 +42,18 @@ python -m src.simulator.replay data/raw/synthetic/SIM01_mixed_demo.csv --speed 3
 ```
 src/
   schema.py                 kontrak data: kolom, batas, flag, window, urutan fitur
-  simulator/                Jalur A: generate.py (7 skenario), replay.py, plot.py
+  simulator/                Jalur A: generate.py (8 skenario, termasuk sleep_disruption), replay.py, plot.py
   sources/wesad.py          Jalur B: SX.pkl -> skema proyek (unpickler aman, timestamp absolut)
   signals/beats.py          deteksi detak PPG/ECG, SQI, HR dan RMSSD dari detak
   ingestion/validate.py     Step 3: quality_flag per record
   preprocessing/clean.py    Step 4: clean series, sesi, gap, window
   features/engineer.py      Step 5: fitur per window + baseline pribadi (batch = online)
   pipeline.py               runner Data Engineering + laporan kualitas
-  ml/rules.py               Step 7: rules_v1 (RuleEngine)
+  ml/rules.py               Step 7: rules_v1 (RuleEngine) + anomali waktu tidur
   ml/evaluate_rules.py      Step 7: evaluasi per event + tuning
   ml/dataset.py             Step 8: dataset WESAD (filter, feature set bebas leakage)
   ml/train.py               Step 9: LOSO, perbandingan, model card
-  ml/predict.py             Step 10: Predictor / predict_risk (rules atau model, kontrak sama)
+  ml/predict.py             Step 10: Predictor / predict_risk (mode rules, model, mix; kontrak sama)
   ml/simulate_stream.py     gladi bersih: stream -> validate -> fitur -> prediksi -> notifikasi
 tests/                      88 test
 docs/
@@ -84,6 +85,18 @@ data/                       output pipeline (tidak di-commit; dibuat ulang)
 | Model WESAD terbaik (`logreg__eda`, LOSO) | F1 0,78 ± 0,14, AUC 0,96 (naif 0,41; rules 0,04 karena HR wrist hilang saat stress) |
 | Gladi bersih rules | 27/27 cek lulus; 1 alert per episode, `device_check` 1 per gangguan |
 | Gladi bersih model | 15/27: model WESAD salah membaca olahraga sebagai stress → demo memakai rules |
+
+## Mode prediksi
+
+```python
+from src.ml.predict import Predictor
+p = Predictor("rules")   # default demo
+p = Predictor("model")   # model WESAD saja (eksperimen)
+p = Predictor("mix")     # rules memutuskan; model boleh menambah "monitor" saat rules normal & diam
+result = p.predict(features)   # buat satu Predictor, pakai ulang untuk semua window
+```
+
+Detail: `docs/ml_target.md` Bagian 8 (anomali waktu tidur) dan Bagian 9 (mode).
 
 ## Keputusan desain penting
 

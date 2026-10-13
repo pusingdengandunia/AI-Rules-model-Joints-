@@ -105,3 +105,27 @@ def test_patient_baseline_is_stable_across_sessions(sessions):
         hrs = [baseline(sessions[(pid, sc)]).heart_rate.median()
                for sc in ("normal", "hr_elevation", "hrv_drop", "missing_data", "bad_quality")]
         assert max(hrs) - min(hrs) < 7, (pid, hrs)
+
+
+def test_sleep_scenario_runs_at_night_with_restless_disruption(sessions):
+    df = sessions[("SIM01", "sleep_disruption")]
+    local = pd.to_datetime(df["timestamp"], utc=True).dt.tz_convert("Asia/Jakarta")
+    assert local.iloc[0].strftime("%H:%M") == "23:00" and local.iloc[-1].hour == 3
+    calm, p = baseline(df), peak(df, "sleep_disruption")
+    assert p.heart_rate.mean() - calm.heart_rate.mean() >= 15
+    mag = np.sqrt(p.accel_x**2 + p.accel_y**2 + p.accel_z**2)
+    assert mag.std() > 0.1
+    calm_mag = np.sqrt(calm.accel_x**2 + calm.accel_y**2 + calm.accel_z**2)
+    assert calm_mag.std() < 0.03  # asleep: almost no movement
+    assert df.loc[df.gt_state == "brief_wake", "gt_expected_alert"].eq(0).all()
+    assert df.loc[df.gt_state == "sleep_disruption", "gt_expected_alert"].eq(1).all()
+
+
+def test_daytime_scenarios_stay_outside_sleep_window(sessions):
+    from src.ml.rules import in_sleep_window
+    for (pid, sc), df in sessions.items():
+        if sc == "sleep_disruption":
+            continue
+        ts = pd.to_datetime(df["timestamp"], utc=True, errors="coerce", format="ISO8601").dropna()
+        ts = ts[ts.dt.year == 2026]  # bad_quality also carries deliberately broken 1970/2099 values
+        assert not in_sleep_window(ts.min()) and not in_sleep_window(ts.max()), (pid, sc)

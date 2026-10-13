@@ -97,3 +97,67 @@ def test_real_model_card_matches_training(tmp_path):
     p = Predictor("model")
     assert p.mode == "model", p.fallback_reason
     assert p.required_features == list(p.model.feature_names_in_)
+
+
+# --- mix mode --------------------------------------------------------------------------------
+
+def test_mix_output_contract_and_version(model_dir):
+    p = Predictor("mix", model_dir=model_dir)
+    r = p.predict(window())
+    assert list(r) == OUTPUT_KEYS
+    assert r["model_version"] == "mix:rules_v1+test_model_v1"
+
+
+def test_mix_model_adds_monitor_when_rules_normal_at_rest(model_dir):
+    p = Predictor("mix", model_dir=model_dir)
+    r = p.predict(window(eda_delta=3.0))  # rules: normal at rest; model: stress
+    assert r["risk_level"] == "monitor" and r["reasons"] == ["model_stress_pattern"]
+
+
+def test_mix_model_never_escalates_to_elevated(model_dir):
+    p = Predictor("mix", model_dir=model_dir)
+    levels = [p.predict(window(i, eda_delta=3.0))["risk_level"] for i in range(6)]
+    assert set(levels) == {"monitor"}
+
+
+def test_mix_ignores_model_during_exercise(model_dir):
+    p = Predictor("mix", model_dir=model_dir)
+    r = p.predict(window(accel_magnitude_std=0.4, eda_delta=3.0, hr_delta_pct=60.0))
+    assert r["risk_level"] == "normal" and r["reasons"] == ["activity"]
+
+
+def test_mix_keeps_rules_alerts_and_marks_agreement(model_dir):
+    p = Predictor("mix", model_dir=model_dir)
+    results = [p.predict(window(i, hr_delta_pct=30.0, eda_delta=3.0)) for i in range(3)]
+    assert results[-1]["risk_level"] == "elevated_physiological_anomaly"
+    assert "model_agrees" in results[-1]["reasons"]
+
+
+def test_mix_ignores_model_at_night(model_dir):
+    p = Predictor("mix", model_dir=model_dir)
+    night = (pd.Timestamp("2026-01-06 02:00", tz="Asia/Jakarta")).tz_convert("UTC")
+    r = p.predict(window(eda_delta=3.0, window_end=night))
+    assert r["risk_level"] == "normal"  # calm sleep; the WESAD model knows nothing about sleep
+
+
+def test_mix_insufficient_data_wins(model_dir):
+    r = Predictor("mix", model_dir=model_dir).predict(window(quality="insufficient_data", eda_delta=3.0))
+    assert r["risk_level"] == "insufficient_data"
+
+
+def test_mix_without_model_falls_back_to_rules(tmp_path):
+    p = Predictor("mix", model_dir=tmp_path)
+    r = p.predict(window(eda_delta=3.0))
+    assert p.mode == "rules" and r["model_version"] == "rules_v1" and "fallback_rules" in r["reasons"]
+
+
+def test_unknown_mode_rejected():
+    with pytest.raises(ValueError):
+        Predictor("both")
+
+
+def test_mix_ignores_model_during_light_movement(model_dir):
+    # Below the rules' activity threshold but not still: the WESAD model would read it as stress.
+    p = Predictor("mix", model_dir=model_dir)
+    r = p.predict(window(accel_magnitude_std=0.06, eda_delta=3.0))
+    assert r["risk_level"] == "normal"

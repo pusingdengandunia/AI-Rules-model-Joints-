@@ -4,7 +4,7 @@
 
 Alur per tick 60 s: record diterima (urut `received_at`) → `validate_sensor_data` → `clean_sensor_data` → `compute_window_features(window_end=now)` → `Predictor.predict` → deduplikasi notifikasi. Kolom `gt_*` dibuang sebelum masuk sistem.
 
-## Hasil: 27/27 cek lulus
+## Hasil: 32/32 cek lulus
 
 | sesi | cek | lulus | detail |
 |---|---|---|---|
@@ -38,6 +38,11 @@ Alur per tick 60 s: record diterima (urut `received_at`) → `validate_sensor_da
 | mixed_demo | A: never 'normal' without good data | ya | normal only when data_quality == good |
 | normal | A: no alert outside episodes | ya | 0 tick(s) with monitor/elevated outside episodes |
 | normal | A: never 'normal' without good data | ya | normal only when data_quality == good |
+| sleep_disruption | B: sleep_disruption -> elevated | ya | first elevated 600 s after onset |
+| sleep_disruption | B: one alert per episode (dedup) | ya | 1 alert notification(s) |
+| sleep_disruption | B: brief wake -> at most monitor, no alert | ya | levels seen: ['monitor', 'normal'], 0 alert(s) |
+| sleep_disruption | A: no alert outside episodes | ya | 0 tick(s) with monitor/elevated outside episodes |
+| sleep_disruption | A: never 'normal' without good data | ya | normal only when data_quality == good |
 
 ## Notifikasi ke caregiver
 
@@ -54,6 +59,8 @@ Alur per tick 60 s: record diterima (urut `received_at`) → `validate_sensor_da
 | SIM01_mixed_demo | 84 | alert | Pola fisiologis abnormal — perlu pemeriksaan caregiver |
 | SIM01_mixed_demo | 88 | resolved | Pola fisiologis kembali stabil |
 | SIM01_mixed_demo | 97 | device_check | Data sensor tidak cukup — periksa perangkat |
+| SIM01_sleep_disruption | 130 | alert | Pola fisiologis abnormal — perlu pemeriksaan caregiver |
+| SIM01_sleep_disruption | 144 | resolved | Pola fisiologis kembali stabil |
 
 ## Aturan notifikasi
 

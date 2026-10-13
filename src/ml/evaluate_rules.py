@@ -8,6 +8,8 @@ Patients are split so thresholds are never judged on the data they were tuned on
 Criteria (docs/ml_target.md Bagian 5):
   arousal  event -> reaches elevated_physiological_anomaly        recall 100 %
   hrv_drop event -> reaches at least monitor                       recall >= 80 %
+  sleep_disruption (night) -> reaches elevated                     recall 100 %
+  brief_wake (night, ~4 min) -> never elevated                     100 %
   normal / high_activity / missing_data / bad_quality sessions    0 alerts
   windows ending inside a gap / off-wrist period                  100 % insufficient_data
 
@@ -33,7 +35,8 @@ from src.schema import MAX_STALENESS_S
 from src.simulator.generate import generate_all
 
 ROOT = Path(__file__).resolve().parents[2]
-TARGET_EVENTS = {"arousal": 2, "hrv_drop": 1}  # required minimum severity
+TARGET_EVENTS = {"arousal": 2, "hrv_drop": 1, "sleep_disruption": 2}  # required minimum severity
+MONITOR_ONLY_EVENTS = {"brief_wake"}  # guardrail: may show "monitor", must never reach "elevated"
 NO_ALERT_SCENARIOS = ["normal", "high_activity", "missing_data", "bad_quality"]
 TOLERANCE_S = 120
 
@@ -78,9 +81,19 @@ def evaluate(scored: pd.DataFrame, events: pd.DataFrame) -> tuple[dict, pd.DataF
         # Recovery belongs to the episode too, so alerts there are not false alarms.
         covered |= ((scored["session_id"] == e.session_id)
                     & (scored["ws_s"] < e.end_s + TOLERANCE_S) & (scored["we_s"] > e.start_s))
+    monitor_ok = pd.Series(False, index=scored.index)  # windows where "monitor" is acceptable
+    for e in ev[ev["type"].isin(MONITOR_ONLY_EVENTS)].itertuples():
+        span = ((scored["session_id"] == e.session_id)
+                & (scored["ws_s"] < e.end_s + TOLERANCE_S) & (scored["we_s"] > e.start_s))
+        w = scored[span]
+        rows.append(dict(session_id=e.session_id, event=e.type, start_s=e.start_s,
+                         max_level=w.loc[w["sev"].idxmax(), "risk_level"] if len(w) else None,
+                         detected=bool((w["sev"] <= 1).all()), latency_s=None))
+        monitor_ok |= span
     per_event = pd.DataFrame(rows)
 
-    false = scored[(scored["sev"] >= 1) & ~covered].sort_values(["session_id", "we_s"])
+    false = scored[((scored["sev"] >= 1) & ~covered & ~monitor_ok) | ((scored["sev"] >= 2) & monitor_ok)]
+    false = false.sort_values(["session_id", "we_s"])
     episodes = int((false.groupby("session_id")["we_s"].diff().fillna(1e9) > 90).sum())
     hours = float((scored.groupby("session_id")["we_s"].max() - scored.groupby("session_id")["ws_s"].min()).sum() / 3600)
 
@@ -101,6 +114,8 @@ def evaluate(scored: pd.DataFrame, events: pd.DataFrame) -> tuple[dict, pd.DataF
     metrics = dict(
         arousal_recall=recall("arousal"),
         hrv_drop_recall=recall("hrv_drop"),
+        sleep_disruption_recall=recall("sleep_disruption"),
+        brief_wake_ok=recall("brief_wake"),
         mean_latency_s=float(per_event["latency_s"].dropna().mean()) if len(per_event) else float("nan"),
         false_alarm_windows=int(len(false)),
         false_alarm_episodes=episodes,
@@ -114,7 +129,8 @@ def evaluate(scored: pd.DataFrame, events: pd.DataFrame) -> tuple[dict, pd.DataF
 
 
 def passes(m: dict) -> bool:
-    return (m["arousal_recall"] == 1.0 and m["hrv_drop_recall"] >= 0.8
+    sleep_ok = all(pd.isna(m[k]) or m[k] == 1.0 for k in ("sleep_disruption_recall", "brief_wake_ok"))
+    return (sleep_ok and m["arousal_recall"] == 1.0 and m["hrv_drop_recall"] >= 0.8
             and sum(m["alerts_in_no_alert_scenarios"].values()) == 0 and m["gap_insufficient_ratio"] == 1.0)
 
 
@@ -159,6 +175,7 @@ def metrics_table(results: dict[str, dict]) -> pd.DataFrame:
     rows = []
     for name, m in results.items():
         rows.append(dict(split=name, arousal_recall=m["arousal_recall"], hrv_drop_recall=m["hrv_drop_recall"],
+                         sleep_recall=m["sleep_disruption_recall"], brief_wake_ok=m["brief_wake_ok"],
                          mean_latency_s=m["mean_latency_s"], false_alarm_episodes=m["false_alarm_episodes"],
                          fa_per_hour=m["false_alarm_episodes_per_hour"],
                          no_alert_scenario_alerts=sum(m["alerts_in_no_alert_scenarios"].values()),
@@ -197,7 +214,8 @@ def main() -> None:
          "bukan akurasi klinis.\n",
          "## Konfigurasi\n", "```json\n" + json.dumps(config, indent=2) + "\n```\n",
          "## Hasil per split\n",
-         "Kriteria lulus: recall arousal→elevated 100%, recall hrv_drop→monitor ≥ 80%, 0 alert di skenario "
+         "Kriteria lulus: recall arousal→elevated 100%, recall hrv_drop→monitor ≥ 80%, recall "
+         "sleep_disruption→elevated 100%, brief_wake tidak pernah elevated, 0 alert di skenario "
          "normal/high_activity/missing_data/bad_quality, 100% window gap = insufficient_data.\n",
          md(metrics_table(results)),
          "\n`fa_per_hour` = episode false alarm per jam data. Episode = alert berurutan di luar event "

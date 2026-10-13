@@ -16,6 +16,7 @@ and the result is checked automatically against the simulator's ground truth
 Run (after `python -m src.pipeline --source synthetic --regenerate`):
   python -m src.ml.simulate_stream                      # all SIM01 sessions, rules
   python -m src.ml.simulate_stream --mode model         # same with the WESAD model (experimental)
+  python -m src.ml.simulate_stream --mode mix           # rules + model hints
   python -m src.ml.simulate_stream --sessions SIM01_mixed_demo
 """
 
@@ -134,22 +135,27 @@ def check_session(timeline: pd.DataFrame, notes: list[dict], events: pd.DataFram
         # ok=None: not applicable (reported, not counted)
         checks.append({"scenario": scenario, "check": name, "pass": None if ok is None else bool(ok), "detail": detail})
 
-    episodes = events[events["type"].isin(["arousal", "hrv_drop"])]
+    episodes = events[events["type"].isin(["arousal", "hrv_drop", "sleep_disruption"])]
     covered = np.zeros(len(t), dtype=bool)
     for e in episodes.itertuples():
         covered |= ((t["t_s"] > e.start_s) & (t["t_s"] <= e.end_s + WINDOW_S + 120)).to_numpy()
 
     for e in events.itertuples():
-        if e.type == "arousal":
+        if e.type in ("arousal", "sleep_disruption"):
             w = t[(t["t_s"] > e.start_s) & (t["t_s"] <= e.peak_end_s + 120)]
             n_alert = int(((nt["type"] == "alert") & (nt["t_s"] > e.start_s) & (nt["t_s"] <= e.end_s + WINDOW_S)).sum()) if len(nt) else 0
             hit = w[w["sev"] >= 2]
-            add("B: arousal -> elevated", len(hit) > 0,
+            add(f"B: {e.type} -> elevated", len(hit) > 0,
                 f"first elevated {hit['t_s'].min() - e.start_s:.0f} s after onset" if len(hit) else f"max {w['risk_level'].max()}")
             add("B: one alert per episode (dedup)", n_alert == 1, f"{n_alert} alert notification(s)")
         elif e.type == "hrv_drop":
             w = t[(t["t_s"] > e.start_s) & (t["t_s"] <= e.peak_end_s + 120)]
             add("B: hrv_drop -> >= monitor", (w["sev"] >= 1).any(), f"levels seen: {sorted(set(w['risk_level']))}")
+        elif e.type == "brief_wake":
+            w = t[(t["t_s"] > e.start_s) & (t["t_s"] <= e.end_s + WINDOW_S)]
+            n_alert = int(((nt["type"] == "alert") & (nt["t_s"] > e.start_s) & (nt["t_s"] <= e.end_s + WINDOW_S)).sum()) if len(nt) else 0
+            add("B: brief wake -> at most monitor, no alert", (w["sev"] <= 1).all() and n_alert == 0,
+                f"levels seen: {sorted(set(w['risk_level']))}, {n_alert} alert(s)")
         elif e.type == "activity":
             w = t[(t["t_s"] > e.start_s) & (t["t_s"] <= e.end_s + WINDOW_S)]
             add("B: exercise -> no alert", (w["sev"] < 1).all(), f"levels seen: {sorted(set(w['risk_level']))}")
@@ -170,8 +176,11 @@ def check_session(timeline: pd.DataFrame, notes: list[dict], events: pd.DataFram
             else:
                 add(f"C: {e.type} -> device-check notification", dev == 1, f"{dev} notification(s)")
 
+    monitor_ok = np.zeros(len(t), dtype=bool)  # a brief wake may show "monitor"
+    for e in events[events["type"] == "brief_wake"].itertuples():
+        monitor_ok |= ((t["t_s"] > e.start_s) & (t["t_s"] <= e.end_s + WINDOW_S)).to_numpy()
     warm = t["t_s"] >= WINDOW_S  # first window still filling
-    false = t[warm & ~covered & (t["sev"] >= 1)]
+    false = t[warm & ~covered & (((t["sev"] >= 1) & ~monitor_ok) | (t["sev"] >= 2))]
     add("A: no alert outside episodes", len(false) == 0, f"{len(false)} tick(s) with monitor/elevated outside episodes")
     add("A: never 'normal' without good data", not ((t["risk_level"] == "normal") & (t["data_quality"] != "good")).any(),
         "normal only when data_quality == good")
@@ -187,7 +196,7 @@ def plot_timeline(raw: pd.DataFrame, timeline: pd.DataFrame, notes: list[dict], 
     colors = {"normal": "#2a9d8f", "monitor": "#e9c46a", "elevated_physiological_anomaly": "#d1495b",
               "insufficient_data": "#8d99ae"}
     shade = {"arousal": "#d1495b", "hrv_drop": "#edae49", "activity": "#00798c", "light_activity": "#8ecae6",
-             "disconnected": "#555555", "off_wrist": "#555555"}
+             "disconnected": "#555555", "off_wrist": "#555555", "sleep_disruption": "#6a4c93", "brief_wake": "#b8a1d9"}
     r = raw[raw.get("gt_injected", pd.Series("", index=raw.index)).fillna("").eq("")]
     ts = pd.to_datetime(r["timestamp"], utc=True, errors="coerce", format="ISO8601")
     hr = pd.to_numeric(r["heart_rate"], errors="coerce")
@@ -218,7 +227,7 @@ def plot_timeline(raw: pd.DataFrame, timeline: pd.DataFrame, notes: list[dict], 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--mode", choices=["rules", "model"], default="rules")
+    ap.add_argument("--mode", choices=["rules", "model", "mix"], default="rules")
     ap.add_argument("--sessions", nargs="*", help="session ids (default: all SIM01 sessions)")
     args = ap.parse_args()
 

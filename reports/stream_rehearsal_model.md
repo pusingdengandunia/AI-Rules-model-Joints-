@@ -4,7 +4,7 @@
 
 Alur per tick 60 s: record diterima (urut `received_at`) → `validate_sensor_data` → `clean_sensor_data` → `compute_window_features(window_end=now)` → `Predictor.predict` → deduplikasi notifikasi. Kolom `gt_*` dibuang sebelum masuk sistem.
 
-## Hasil: 15/27 cek lulus
+## Hasil: 18/32 cek lulus
 
 | sesi | cek | lulus | detail |
 |---|---|---|---|
@@ -38,6 +38,11 @@ Alur per tick 60 s: record diterima (urut `received_at`) → `validate_sensor_da
 | mixed_demo | A: never 'normal' without good data | ya | normal only when data_quality == good |
 | normal | A: no alert outside episodes | **TIDAK** | 3 tick(s) with monitor/elevated outside episodes |
 | normal | A: never 'normal' without good data | ya | normal only when data_quality == good |
+| sleep_disruption | B: sleep_disruption -> elevated | **TIDAK** | max monitor |
+| sleep_disruption | B: one alert per episode (dedup) | **TIDAK** | 0 alert notification(s) |
+| sleep_disruption | B: brief wake -> at most monitor, no alert | ya | levels seen: ['monitor', 'normal'], 0 alert(s) |
+| sleep_disruption | A: no alert outside episodes | ya | 0 tick(s) with monitor/elevated outside episodes |
+| sleep_disruption | A: never 'normal' without good data | ya | normal only when data_quality == good |
 
 ## Notifikasi ke caregiver
 

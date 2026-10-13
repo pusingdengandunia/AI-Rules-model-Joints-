@@ -17,6 +17,8 @@ SHADE = {
     "recovery": "#cccccc",
     "missing": "#555555",
     "artifact": "#6a4c93",
+    "sleep_disruption": "#9d4edd",
+    "brief_wake": "#c8b6ff",
 }
 SIGNALS = [
     ("heart_rate", "HR (bpm)"),

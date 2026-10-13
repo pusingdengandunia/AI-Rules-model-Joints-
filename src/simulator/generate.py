@@ -23,6 +23,7 @@ import json
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
@@ -41,7 +42,15 @@ EFFECTS = {
     "arousal": dict(hr=(25, 35), rmssd=0.55, eda=(2.0, 4.0), temp=-0.3, move=(0.005, 0.015), scr_rate=0.06),
     "hrv_drop": dict(hr=(5, 10), rmssd=0.45, eda=(0.8, 1.5), temp=-0.1, move=(0.0, 0.005), scr_rate=0.02),
     "activity": dict(hr=(45, 60), rmssd=0.35, eda=(1.0, 2.0), temp=0.4, move=(0.30, 0.50), scr_rate=0.0),
+    # Night: awake and restless with a racing heart, vs a short wake-up that settles by itself.
+    "sleep_disruption": dict(hr=(20, 30), rmssd=0.6, eda=(1.0, 2.0), temp=0.1, move=(0.15, 0.30), scr_rate=0.04),
+    "brief_wake": dict(hr=(10, 15), rmssd=0.8, eda=0.3, temp=0.0, move=(0.10, 0.20), scr_rate=0.0),
 }
+
+# Sleeping physiology relative to the patient's daytime resting baseline.
+SLEEP_HR_OFFSET_BPM = -6.0
+SLEEP_RMSSD_FACTOR = 1.15
+SLEEP_MOVE_G = 0.003
 
 # What the alert system is expected to do while an event is at its peak.
 EXPECTED = {
@@ -49,6 +58,8 @@ EXPECTED = {
     "arousal": ("alert", 1),
     "hrv_drop": ("warning", 1),
     "activity": ("none", 0),  # physiological arousal explained by movement: must NOT alert
+    "sleep_disruption": ("alert", 1),
+    "brief_wake": ("none", 0),  # at most "monitor" (guardrail: short wake-ups are not alarms)
 }
 
 
@@ -82,6 +93,8 @@ class Scenario:
     dropout_rate: float = 0.0  # fraction of isolated 1 s HR losses
     artifacts: list[tuple[int, int]] = field(default_factory=list)  # (start_s, duration_s) motion spikes
     corrupt: bool = False  # inject transport/format problems (bad_quality)
+    asleep: bool = False  # patient sleeps through the session (lower HR, almost no movement)
+    start_local: str | None = None  # "HH:MM" in SIMULATOR_TIMEZONE; default = daytime morning
 
 
 def build_scenarios() -> list[Scenario]:
@@ -144,7 +157,19 @@ def build_scenarios() -> list[Scenario]:
             dropout_rate=0.01,
             artifacts=[(6800, 6)],
         ),
+        Scenario(
+            "sleep_disruption",
+            "Night 23:00-04:00 local. Calm sleep, a 15-minute disruption (HR spike + restless movement, "
+            "alert expected) and a ~4-minute wake-up that settles (at most monitor).",
+            18000,
+            [E("sleep_disruption", 7200, 60, 900, 300), E("brief_wake", 12600, 20, 150, 60)],
+            asleep=True,
+            start_local="23:00",
+        ),
     ]
+
+
+SIMULATOR_TIMEZONE = "Asia/Jakarta"  # matches RULES_CONFIG["PATIENT_TIMEZONE"]
 
 
 def _smoothstep(x: np.ndarray) -> np.ndarray:
@@ -243,11 +268,15 @@ def generate_session(sc: Scenario, patient_id: str, rng: np.random.Generator, st
     eda0 = base["eda0"] * (1 + rng.normal(0, 0.1))
     temp0 = base["temp0"] + rng.normal(0, 0.15)
 
+    if sc.asleep:
+        hr0 += SLEEP_HR_OFFSET_BPM
+        rmssd0 *= SLEEP_RMSSD_FACTOR
+
     hr_t = hr0 + _slow_wander(rng, n, 2.0, 120)
     rmssd_f = np.ones(n)
     eda = eda0 + _slow_wander(rng, n, 0.15, 300)
     temp_drive = np.zeros(n)
-    move = np.abs(rng.normal(0.005, 0.003, n))
+    move = np.abs(rng.normal(SLEEP_MOVE_G if sc.asleep else 0.005, 0.002 if sc.asleep else 0.003, n))
     scr_rate = np.full(n, 0.003)
 
     state = np.array(["baseline"] * n, dtype=object)
@@ -428,7 +457,14 @@ def generate_all(seed: int, n_patients: int, scenarios: list[Scenario] | None = 
         for sc_idx, sc in enumerate(scenarios):
             # Independent stream per (patient, scenario): adding a scenario does not change the others.
             rng = np.random.default_rng([seed, p_idx, sc_idx])
-            start = base + timedelta(days=sc_idx, hours=p_idx)  # scenario 0 (normal) is each patient's first session
+            if sc.start_local:
+                # Local clock time on that day, patients 30 min apart, converted to UTC.
+                day = (base + timedelta(days=sc_idx)).astimezone(ZoneInfo(SIMULATOR_TIMEZONE)).date()
+                h, m = map(int, sc.start_local.split(":"))
+                local = datetime(day.year, day.month, day.day, h, m, tzinfo=ZoneInfo(SIMULATOR_TIMEZONE))
+                start = (local + timedelta(minutes=30 * p_idx)).astimezone(timezone.utc)
+            else:
+                start = base + timedelta(days=sc_idx, hours=p_idx)  # 09:00-13:00 WIB; scenario 0 is each patient's first session
             df, ev = generate_session(sc, patient_id, rng, start, patient_base)
             frames.append(df)
             events.extend(ev)
@@ -457,9 +493,11 @@ def main() -> None:
         schema_version=SCHEMA_VERSION, seed=args.seed, patients=args.patients, sample_rate_hz=1,
         generated_by="src/simulator/generate.py", synthetic=True,
         warning="Synthetic data for pipeline/demo testing only. Not clinical data. Not for training PTSD detectors.",
+        timezone=SIMULATOR_TIMEZONE,
         scenarios=[dict(name=s.name, description=s.description, duration_s=s.duration_s,
                         events=[asdict(e) for e in s.events], gaps=[asdict(g) for g in s.gaps],
-                        dropout_rate=s.dropout_rate, artifacts=s.artifacts, corrupt=s.corrupt) for s in scenarios],
+                        dropout_rate=s.dropout_rate, artifacts=s.artifacts, corrupt=s.corrupt,
+                        asleep=s.asleep, start_local=s.start_local) for s in scenarios],
         files=files,
     )
     (args.out / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
