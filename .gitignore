@@ -1,8 +1,8 @@
-# Generated data (rebuild with: python -m src.pipeline --source all)
+﻿# Generated data (rebuild with: python -m src.pipeline --source all)
 data/
 
-# Trained models are rebuilt by src/ml/train.py; model_card.json is kept
-models/*.joblib
+# models/model.joblib IS committed (2 KB): teammates need it for mix/model mode without the 13 GB WESAD data
+
 
 # Python
 __pycache__/
