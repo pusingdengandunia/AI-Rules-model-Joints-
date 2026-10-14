@@ -87,3 +87,22 @@ def test_windows_are_clock_aligned_and_inside_session():
     assert wins[0][0] == pd.Timestamp("2026-01-05T08:01:00Z")
     assert all(ws >= start and we <= end + pd.Timedelta(seconds=1) for ws, we in wins)
     assert all((we - ws).total_seconds() == WINDOW_S for ws, we in wins)
+
+
+def test_no_records_at_all_gives_insufficient_data_not_a_crash(records):
+    # A disconnected sensor sends nothing: the backend still asks for a status every minute.
+    from src.features.engineer import compute_window_features
+    from src.ml.predict import Predictor
+    now = pd.Timestamp("2026-01-05T09:00:00Z")
+    clean = clean_sensor_data(validate_sensor_data(records.iloc[0:0], now=now))
+    assert clean.empty and {"timestamp_utc", "session_id", "heart_rate"} <= set(clean.columns)
+    f = compute_window_features(clean, {"valid": True, "hr_baseline": 70.0}, window_end=now)
+    f.update(patient_id="P1", window_end=now)
+    r = Predictor("rules").predict(f)
+    assert r["risk_level"] == "insufficient_data" and r["reasons"] == ["stale_data"]
+
+
+def test_only_unusable_records_gives_empty_clean(records):
+    df = records.iloc[:5].copy()
+    df["timestamp"] = "garbage"
+    assert clean_sensor_data(validate_sensor_data(df)).empty

@@ -35,9 +35,14 @@ def clean_sensor_data(validated: pd.DataFrame) -> pd.DataFrame:
         if col not in df.columns:
             continue
         df[col] = pd.to_numeric(df[col], errors="coerce")
-        bad = df["quality_issues"].str.contains(f"(?:out_of_range|non_numeric):{col}(?:;|$)", regex=True)
+        issues = df["quality_issues"].astype("string").fillna("")
+        bad = issues.str.contains(f"(?:out_of_range|non_numeric):{col}(?:;|$)", regex=True).astype(bool)
         df.loc[bad, col] = np.nan
     df = df.sort_values(["patient_id", "timestamp_utc", "ingest_seq"]).reset_index(drop=True)
+    if df.empty:  # no usable records (e.g. sensor disconnected): an empty, well-formed frame
+        df["session_id"] = pd.Series(dtype="object")
+        df["t_rel_s"] = pd.Series(dtype="float64")
+        return df
     df["session_id"] = assign_sessions(df)
     start = df.groupby("session_id")["timestamp_utc"].transform("min")
     df["t_rel_s"] = (df["timestamp_utc"] - start).dt.total_seconds()
