@@ -110,14 +110,13 @@ Kalau file model tidak ada, `mix`/`model` otomatis kembali ke `rules` (reason `f
 
 ```json
 {"patient_id": "SIM01", "window_end": "2026-01-11 02:54:00+00:00",
- "risk_level": "elevated_physiological_anomaly", "risk_score": null,
+ "risk_level": "elevated_physiological_anomaly",
  "reasons": ["hr_above_baseline", "at_rest"], "model_version": "rules_v1", "data_quality": "good"}
 ```
 
 | Field | Arti untuk UI |
 |---|---|
 | `risk_level` | status utama (tabel di bawah) |
-| `risk_score` | **selalu `null`**. Jangan tampilkan angka/persen risiko |
 | `reasons` | kode penjelasan; terjemahkan dengan tabel di bawah |
 | `model_version` | tampilkan di layar detail/debug saja |
 | `data_quality` | `good` atau `insufficient_data` |

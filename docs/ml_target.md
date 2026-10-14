@@ -51,14 +51,13 @@ Pemetaan ke label evaluasi sintetis:
   "patient_id": "SIM01",
   "window_end": "2026-01-06T02:35:00Z",
   "risk_level": "monitor",
-  "risk_score": null,
   "reasons": ["hr_above_baseline", "at_rest"],
   "model_version": "rules_v1",
   "data_quality": "good"
 }
 ```
 
-- `risk_score`: `null` sampai ada skor yang terkalibrasi dan didefinisikan maknanya. Probabilitas model tidak ditampilkan sebagai "risiko".
+- Tidak ada skor angka. Rules tidak punya skor, dan probabilitas model belum terkalibrasi sehingga akan terbaca sebagai "risiko" medis. Kalau nanti ada skor yang tervalidasi, tambahkan sebagai field baru dengan nama yang tidak berbunyi "risiko".
 - `reasons`: kode singkat yang bisa diterjemahkan app, misalnya `hr_above_baseline`, `hrv_below_baseline`, `activity`, `no_baseline`, `insufficient_samples`, `stale_data`.
 - `model_version`: `rules_v1` atau versi dari `models/model_card.json`.
 
@@ -112,7 +111,7 @@ Teks app yang disarankan:
 
 1. Dua target terpisah (Bagian 1), dengan rules sebagai default demo.
 2. Empat kategori output (Bagian 3) dan teks app untuk caregiver (Bagian 6).
-3. Kontrak output di Bagian 4, termasuk `risk_score = null`.
+3. Kontrak output di Bagian 4 (6 field, tanpa skor angka).
 4. Kriteria sukses Target A di Bagian 5.
 
 ## 8. Anomali waktu tidur (hanya rules, Target A)

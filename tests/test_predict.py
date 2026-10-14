@@ -38,13 +38,13 @@ def model_dir(tmp_path):
 def test_rules_output_contract():
     r = Predictor("rules").predict(window())
     assert list(r) == OUTPUT_KEYS
-    assert r["model_version"] == "rules_v1" and r["risk_score"] is None
+    assert r["model_version"] == "rules_v1" and "risk_score" not in r
 
 
 def test_model_output_contract_is_identical(model_dir):
     r = Predictor("model", model_dir=model_dir).predict(window())
     assert list(r) == OUTPUT_KEYS
-    assert r["model_version"] == "test_model_v1" and r["risk_score"] is None
+    assert r["model_version"] == "test_model_v1" and "risk_score" not in r
 
 
 @pytest.mark.parametrize("mode", ["rules", "model"])

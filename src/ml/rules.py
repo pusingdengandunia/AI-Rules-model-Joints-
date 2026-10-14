@@ -161,7 +161,6 @@ class RuleEngine:
             "patient_id": pid,
             "window_end": str(end) if end is not None else None,
             "risk_level": level,
-            "risk_score": None,
             "reasons": reasons,
             "model_version": RULES_VERSION,
             "data_quality": features.get("data_quality"),

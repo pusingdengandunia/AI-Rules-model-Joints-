@@ -6,7 +6,7 @@ import pytest
 from src.ml.rules import LEVELS, RULES_CONFIG, RuleEngine, assess_window
 
 T0 = pd.Timestamp("2026-01-05T08:10:00Z")
-CONTRACT_KEYS = {"patient_id", "window_end", "risk_level", "risk_score", "reasons", "model_version", "data_quality"}
+CONTRACT_KEYS = {"patient_id", "window_end", "risk_level", "reasons", "model_version", "data_quality"}
 
 
 def window(i=0, hr=0.0, hrv=0.0, accel=0.01, quality="good", pid="P1", staleness=1.0):
@@ -21,7 +21,8 @@ def run(engine, windows):
 def test_output_follows_contract():
     r = RuleEngine().predict(window())
     assert set(r) == CONTRACT_KEYS
-    assert r["risk_level"] in LEVELS and r["risk_score"] is None and r["model_version"] == "rules_v1"
+    assert r["risk_level"] in LEVELS and r["model_version"] == "rules_v1"
+    assert "risk_score" not in r
 
 
 def test_insufficient_data_always_wins():

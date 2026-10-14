@@ -184,7 +184,7 @@ def main() -> None:
         "threshold": THRESHOLD,
         "positive_class": "stress",
         "output_mapping": {"1": "monitor (reason: model_stress_pattern)", "0": "normal"},
-        "risk_score": "null: predict_proba is not calibrated and is not shown as risk",
+        "score_output": "none: predict_proba is not calibrated, so no score is part of the output",
         "training_data": {"dataset": "WESAD wrist (Empatica E4)", "subjects": int(ds["patient_id"].nunique()),
                           "windows": int(len(ds)), "stress_windows": int(y.sum()),
                           "file": "data/ml/wesad_dataset.csv", "builder": "src/ml/dataset.py"},

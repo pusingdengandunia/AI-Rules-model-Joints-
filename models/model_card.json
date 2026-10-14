@@ -16,7 +16,7 @@
     "1": "monitor (reason: model_stress_pattern)",
     "0": "normal"
   },
-  "risk_score": "null: predict_proba is not calibrated and is not shown as risk",
+  "score_output": "none: predict_proba is not calibrated, so no score is part of the output",
   "training_data": {
     "dataset": "WESAD wrist (Empatica E4)",
     "subjects": 15,

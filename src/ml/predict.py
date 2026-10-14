@@ -40,7 +40,9 @@ from src.ml.rules import RULES_CONFIG, RULES_VERSION, RuleEngine, assess_window,
 
 ROOT = Path(__file__).resolve().parents[2]
 MODELS_DIR = ROOT / "models"
-OUTPUT_KEYS = ["patient_id", "window_end", "risk_level", "risk_score", "reasons", "model_version", "data_quality"]
+OUTPUT_KEYS = ["patient_id", "window_end", "risk_level", "reasons", "model_version", "data_quality"]
+# No numeric score on purpose: rules have none, and the model's predict_proba is not calibrated,
+# so any number would be read as a clinical "risk" (spec Step 10/12).
 MODES = ("rules", "model", "mix")
 MODEL_IGNORED_REASONS = {"activity", "post_activity"}
 # The WESAD model learned "movement = stress" (subjects gesture during the TSST), so in mix mode it
@@ -125,7 +127,6 @@ class Predictor:
     def _predict_model(self, f: dict) -> dict:
         out = {"patient_id": f.get("patient_id"),
                "window_end": str(f["window_end"]) if f.get("window_end") is not None else None,
-               "risk_score": None,  # predict_proba is not calibrated: never shown as risk
                "data_quality": f.get("data_quality")}
         stress, reasons = self._model_vote(f)
         if stress is None:
