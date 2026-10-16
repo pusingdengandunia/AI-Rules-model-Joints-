@@ -10,3 +10,6 @@ __pycache__/
 .pytest_cache/
 .venv/
 venv/
+
+# Backend database (local)
+backend_data/
